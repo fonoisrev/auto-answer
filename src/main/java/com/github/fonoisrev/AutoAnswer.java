@@ -3,15 +3,17 @@ package com.github.fonoisrev;
 import com.github.fonoisrev.data.QuestionsData;
 import com.github.fonoisrev.data.UserData;
 import com.github.fonoisrev.run.MyRunner;
-import com.github.fonoisrev.run.MyWebSocketClient;
-import org.java_websocket.drafts.Draft_6455;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.Proxy.Type;
 
 @SpringBootApplication
 public class AutoAnswer {
@@ -36,8 +38,23 @@ public class AutoAnswer {
         return new UserData();
     }
     
+    @Value("${proxy.ip}")
+    String proxyIp = "";
+    
+    @Value("${proxy.port}")
+    Integer proxyPort = 0;
+    
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        SimpleClientHttpRequestFactory factory =
+                new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(30_000);
+        factory.setReadTimeout(30_000);
+        if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
+            factory.setProxy(new Proxy(Type.HTTP,
+                                       new InetSocketAddress(proxyIp,
+                                                             proxyPort)));
+        }
+        return new RestTemplate(factory);
     }
 }

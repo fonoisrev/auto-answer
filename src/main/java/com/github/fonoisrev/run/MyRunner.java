@@ -11,9 +11,14 @@ import org.jsfr.json.path.JsonPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.Proxy.Type;
 import java.net.URI;
 
 public class MyRunner implements CommandLineRunner {
@@ -25,6 +30,7 @@ public class MyRunner implements CommandLineRunner {
     private static JsonSurfer SURFER = JsonSurferJackson.INSTANCE;
     
     private static JsonPath COUNT_PATH = JsonPathCompiler.compile("$..count");
+    
     private static JsonPath SCORE_PATH = JsonPathCompiler.compile("$..score");
     
     @Autowired
@@ -35,6 +41,12 @@ public class MyRunner implements CommandLineRunner {
     
     @Autowired
     RestTemplate template;
+    
+    @Value("${proxy.ip}")
+    String proxyIp = "";
+    
+    @Value("${proxy.port}")
+    Integer proxyPort = 0;
     
     @Override
     public void run(String... args) throws Exception {
@@ -50,8 +62,11 @@ public class MyRunner implements CommandLineRunner {
                         new MyWebSocketClient(new URI("ws://eas.yiqiapp.cn/ws"),
                                               new Draft_6455(), user,
                                               questionsData);
-//                client.setProxy(new Proxy(Type.HTTP, new InetSocketAddress(
-//                        "192.168.105.71", 80)));
+                if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
+                    client.setProxy(new Proxy(Type.HTTP,
+                                              new InetSocketAddress(proxyIp,
+                                                                    proxyPort)));
+                }
                 client.connect();
                 client.join();
             }
