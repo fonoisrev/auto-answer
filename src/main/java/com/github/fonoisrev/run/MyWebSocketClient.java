@@ -56,6 +56,10 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private CountDownLatch countDownLatch = new CountDownLatch(1);
     
+    private Question question;
+    
+    private boolean noMatch;
+    
     public MyWebSocketClient(
             URI serverUri, Draft protocolDraft, User user,
             QuestionsData questionsData) {
@@ -94,7 +98,7 @@ public class MyWebSocketClient extends WebSocketClient {
             LOGGER.info("Send {}", ready_computer);
             send(ready_computer);
         } else if ("Question".equals(type)) {
-            Question question = new Question();
+            question = new Question();
             question.id =
                     SURFER.collectOne(json, Integer.class, QUESTION_ID_PATH);
             question.title =
@@ -113,8 +117,10 @@ public class MyWebSocketClient extends WebSocketClient {
             
             String answerStr = questionsData.getAnswer(question.title);
             if (StringUtils.isEmpty(answerStr)) {
+                noMatch = true;
                 LOGGER.error("Question[{}] no match answers", question.title);
             } else {
+                noMatch = false;
                 for (Option o : question.options) {
                     String content = o.optionContentStr;
                     if (answerStr.equals(content)) {
@@ -134,6 +140,19 @@ public class MyWebSocketClient extends WebSocketClient {
             LOGGER.info("Send answer {}", answer);
             send(answer);
         } else if ("answer_complete".equals(type)) {
+            String myAnswer = SURFER.collectOne(json, String.class, JsonPathCompiler.compile("$..answer"));
+            String rightAnswer = SURFER.collectOne(json, String.class, JsonPathCompiler.compile("$..rightAnswer"));
+            if (!myAnswer.equals(rightAnswer) || noMatch){
+                LOGGER.error("答案错误 或 题库中不存在！！");
+                String answerStr = null;
+                for (Option option : question.options) {
+                    if (option.id.equals(rightAnswer)) {
+                        answerStr = option.optionContentStr;
+                        break;
+                    }
+                }
+                questionsData.addQuestion(question.title, answerStr);
+            }
         } else {
 //            throw new RuntimeException("No Match !!!");
             close();

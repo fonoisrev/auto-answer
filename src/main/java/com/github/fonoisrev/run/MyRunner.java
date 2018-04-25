@@ -50,7 +50,8 @@ public class MyRunner implements CommandLineRunner {
                         new MyWebSocketClient(new URI("ws://eas.yiqiapp.cn/ws"),
                                               new Draft_6455(), user,
                                               questionsData);
-                
+//                client.setProxy(new Proxy(Type.HTTP, new InetSocketAddress(
+//                        "192.168.105.71", 80)));
                 client.connect();
                 client.join();
             }
@@ -61,6 +62,6 @@ public class MyRunner implements CommandLineRunner {
             user.score = SURFER.collectOne(json, Integer.class, SCORE_PATH);
             LOGGER.info("{} 答题完成, 总分 {}", user.name, user.score);
         }
-        
+        questionsData.doSave();
     }
 }

@@ -1,4 +1,3 @@
-import com.github.fonoisrev.bean.User;
 import com.github.fonoisrev.data.QuestionsData;
 import com.github.fonoisrev.data.UserData;
 
@@ -12,5 +11,8 @@ public class CsvTest {
     
         UserData userData = new UserData();
         userData.init();
+        
+        data.addQuestion("abcd", "efg");
+        data.doSave();
     }
 }
