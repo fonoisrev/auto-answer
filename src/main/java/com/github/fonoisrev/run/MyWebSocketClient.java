@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.CountDownLatch;
 
@@ -164,6 +165,11 @@ public class MyWebSocketClient extends WebSocketClient {
     @Override
     public void onClose(int code, String reason, boolean remote) {
         countDownLatch.countDown();
+        try {
+            questionsData.doSave();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     
     @Override

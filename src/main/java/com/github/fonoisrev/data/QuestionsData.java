@@ -51,6 +51,11 @@ public class QuestionsData {
     }
     
     public void doSave() throws IOException {
+        if (qa_add.size() == 0) {
+            return;
+        }
+        
+        LOGGER.info("向ADD题库写入题目");
         try (Writer out = new FileWriter(DATA_FILE_ADDTION_PATH, true);) {
             CSVFormat format =
                     CSVFormat.EXCEL.withHeader("Q", "A").withSkipHeaderRecord();
@@ -63,6 +68,7 @@ public class QuestionsData {
                     e.printStackTrace();
                 }
             });
+            qa_add.clear();
         }
     }
 }

@@ -48,8 +48,8 @@ public class AutoAnswer {
     public RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory =
                 new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(30_000);
-        factory.setReadTimeout(30_000);
+        factory.setConnectTimeout(60_000);
+        factory.setReadTimeout(60_000);
         if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
             factory.setProxy(new Proxy(Type.HTTP,
                                        new InetSocketAddress(proxyIp,

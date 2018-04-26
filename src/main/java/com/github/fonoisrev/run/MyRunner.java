@@ -77,6 +77,5 @@ public class MyRunner implements CommandLineRunner {
             user.score = SURFER.collectOne(json, Integer.class, SCORE_PATH);
             LOGGER.info("{} 答题完成, 总分 {}", user.name, user.score);
         }
-        questionsData.doSave();
     }
 }
