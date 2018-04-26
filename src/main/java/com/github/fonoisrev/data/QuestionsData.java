@@ -61,7 +61,6 @@ public class QuestionsData {
                     CSVFormat.EXCEL.withHeader("Q", "A").withSkipHeaderRecord();
             CSVPrinter printer = new CSVPrinter(out, format);
             qa_add.forEach((q, a) -> {
-                List<String> records = new ArrayList<>();
                 try {
                     printer.printRecord(q, a);
                 } catch (IOException e) {
