@@ -3,10 +3,6 @@ package com.github.fonoisrev.run;
 import com.github.fonoisrev.bean.User;
 import com.github.fonoisrev.data.UserData;
 import org.java_websocket.drafts.Draft_6455;
-import org.jsfr.json.JsonSurfer;
-import org.jsfr.json.JsonSurferJackson;
-import org.jsfr.json.compiler.JsonPathCompiler;
-import org.jsfr.json.path.JsonPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +15,11 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Proxy.Type;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MyRunner implements CommandLineRunner {
     
@@ -40,31 +41,33 @@ public class MyRunner implements CommandLineRunner {
     
     @Override
     public void run(String... args) throws Exception {
-        for (User user : userData.getUsers()) {
-//            String json = template.getForObject(
-//                    "http://api.yiqiapp.cn/dkdt/api/login/auto/" +
-//                    user.loginToken, String.class);
-//            LOGGER.info("Start User Receive {}", json);
-//            user.count = SURFER.collectOne(json, Integer.class, COUNT_PATH);
-//            for (int i = user.count; i > 0; --i) {
-//                LOGGER.info("{} 开始第 {} 次答题", user.name, i);
-                MyWebSocketClient client =
-                        new MyWebSocketClient(new URI("ws://bath5.mggame.com.cn/wshscf"),
-                                              new Draft_6455(), user);
-                if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
-                    client.setProxy(new Proxy(Type.HTTP,
-                                              new InetSocketAddress(proxyIp,
-                                                                    proxyPort)));
+        ExecutorService threadPool = Executors.newFixedThreadPool(5);
+        List<User> users = userData.getUsers();
+        CountDownLatch latch = new CountDownLatch(users.size());
+        
+        for (User user : users) {
+            Runnable game = new Runnable() {
+                
+                @Override
+                public void run() {
+                    
+                    MyWebSocketClient client = null;
+                    try {
+                        URI uri = new URI("ws://bath5.mggame.com.cn/wshscf");
+                        client = new MyWebSocketClient(uri, new Draft_6455(), user, latch);
+                        if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
+                            client.setProxy(new Proxy(
+                                    Type.HTTP, new InetSocketAddress(proxyIp, proxyPort)));
+                        }
+                        client.connect();
+                    } catch (URISyntaxException e) {
+                        e.printStackTrace();
+                    }
                 }
-                client.connect();
-//                client.join();
-//            }
-//            json = template.getForObject(
-//                    "http://api.yiqiapp.cn/dkdt/api/login/auto/" +
-//                    user.loginToken, String.class);
-//            LOGGER.info("End Receive {}", json);
-//            user.score = SURFER.collectOne(json, Integer.class, SCORE_PATH);
-//            LOGGER.info("{} 答题完成, 总分 {}", user.name, user.score);
+            };
+            threadPool.submit(game);
         }
+        
+        latch.await();
     }
 }

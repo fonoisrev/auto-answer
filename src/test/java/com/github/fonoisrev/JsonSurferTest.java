@@ -1,6 +1,7 @@
 package com.github.fonoisrev;
 
 import com.github.fonoisrev.bean.Round;
+import com.github.fonoisrev.bean.User;
 import org.jsfr.json.JsonSurfer;
 import org.jsfr.json.JsonSurferJackson;
 import org.jsfr.json.compiler.JsonPathCompiler;
@@ -8,6 +9,7 @@ import org.jsfr.json.path.JsonPath;
 import org.junit.Test;
 
 import java.util.Collection;
+import java.util.Scanner;
 
 public class JsonSurferTest {
     
@@ -38,5 +40,17 @@ public class JsonSurferTest {
     
         Collection<Round> rounds = surfer.collectAll(json, Round.class, path);
         System.out.println(rounds);
+    }
+    
+    @Test
+    public void test2() {
+        String json = "{\"data\":{\"corporationId\":39,\"corporationName\":\"信息技术公司\"," +
+                      "\"isFirstLogin\":\"0\",\"photoId\":6,\"pkRate\":\"0\",\"roundIndex\":1," +
+                      "\"roundName\":\"1978年\",\"uid\":\"1310627\",\"userId\":29832," +
+                      "\"userName\":\"吴航\",\"winCnt\":0},\"mcmd\":\"Account\"," +
+                      "\"scmd\":\"LogonSuccess\"}";
+        JsonPath userData = JsonPathCompiler.compile("$..data");
+        User user = surfer.collectOne(json, User.class, userData);
+        System.out.println(user);
     }
 }

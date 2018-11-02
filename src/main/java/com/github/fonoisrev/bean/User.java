@@ -14,10 +14,8 @@ public class User {
     @Override
     public String toString() {
         return "User{" +
-               "userName='" + userName + '\'' +
-               ", token='" + token + '\'' +
-               ", corporationName='" + corporationName + '\'' +
-               ", userId=" + userId +
+               "name='" + userName + '\'' +
+               ", id=" + userId +
                '}';
     }
 }
