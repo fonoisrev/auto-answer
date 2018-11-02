@@ -28,10 +28,8 @@ public class UserData {
         Iterable<CSVRecord> records = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
         for (CSVRecord record : records) {
             User user = new User();
-            user.name =record.get("NAME");
-            user.phoneNum =record.get("PHONE");
-            user.answerToken = record.get("ANSWER_TOKEN");
-            user.loginToken = record.get("LOGIN_TOKEN");
+            user.userName = record.get("NAME");
+            user.token = record.get("TOKEN");
             users.add(user);
         }
         LOGGER.info("loaded users size is {}", users.size());

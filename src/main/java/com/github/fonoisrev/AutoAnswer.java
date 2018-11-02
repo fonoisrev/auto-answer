@@ -1,6 +1,5 @@
 package com.github.fonoisrev;
 
-import com.github.fonoisrev.data.QuestionsData;
 import com.github.fonoisrev.data.UserData;
 import com.github.fonoisrev.run.MyRunner;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,12 +20,6 @@ public class AutoAnswer {
     public static void main(String[] args) {
         new SpringApplicationBuilder(AutoAnswer.class).web(false).run(args);
     }
-    
-    @Bean
-    public QuestionsData questionsData() {
-        return new QuestionsData();
-    }
-    
     
     @Bean
     public MyRunner myRunner() {

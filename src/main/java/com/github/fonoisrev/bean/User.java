@@ -2,20 +2,22 @@ package com.github.fonoisrev.bean;
 
 public class User {
     
-    public String name;
+    public String userName;
     
-    public String loginToken;
+    public String token;
     
-    public String phoneNum;
+    /*信息技术公司*/
+    public String corporationName;
     
-    public String answerToken;
+    public int userId;
     
-//    public String company;
-    
-//    public String nick;
-
-    public int score;
-    
-    public int count;
-    
+    @Override
+    public String toString() {
+        return "User{" +
+               "userName='" + userName + '\'' +
+               ", token='" + token + '\'' +
+               ", corporationName='" + corporationName + '\'' +
+               ", userId=" + userId +
+               '}';
+    }
 }

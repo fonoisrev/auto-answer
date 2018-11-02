@@ -5,11 +5,9 @@ import java.util.Collection;
 
 public class Question {
 
-    public int id;
+    public String content;
     
-    public String title;
+    public int correctAnswerCode;
     
-    public int verifyCode;
-    
-    public Collection<Option> options = new ArrayList<>();
+    public String correctAnswerContent;
 }
