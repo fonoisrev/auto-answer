@@ -1,7 +1,12 @@
 package com.github.fonoisrev.run;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.fonoisrev.bean.Question;
 import com.github.fonoisrev.bean.Round;
 import com.github.fonoisrev.bean.User;
+import com.github.fonoisrev.data.QuestionData;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.drafts.Draft;
 import org.java_websocket.handshake.ServerHandshake;
@@ -12,6 +17,7 @@ import org.jsfr.json.path.JsonPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
@@ -28,6 +34,12 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private static JsonSurfer SURFER = JsonSurferJackson.INSTANCE;
     
+    private static ObjectMapper objectMapper = new ObjectMapper();
+    
+    static {
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
+    
     private static JsonPath MCMD = JsonPathCompiler.compile("$..mcmd");
     
     private static JsonPath SCMD = JsonPathCompiler.compile("$..scmd");
@@ -36,15 +48,24 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private User user;
     
+    private Question currentQuestion;
+    
+    private QuestionData questionData;
+    
     /**
      * 关卡
      */
     private Round round;
     
-    public MyWebSocketClient(URI serverUri, Draft protocolDraft, User user, CountDownLatch latch) {
+    private long lastSend = 0L;
+    
+    public MyWebSocketClient(
+            URI serverUri, Draft protocolDraft, User user, QuestionData questionData,
+            CountDownLatch latch) {
         super(serverUri, protocolDraft);
         this.user = user;
         this.latch = latch;
+        this.questionData = questionData;
     }
     
     @Override
@@ -58,7 +79,7 @@ public class MyWebSocketClient extends WebSocketClient {
         
         if (json.equals("{\"mcmd\":\"Sys\",\"scmd\":\"Heart\"}")) {
             // heart beat response
-            doSend("{\"mcmd\":\"Sys\",\"scmd\":\"Heart\"}");
+            send("{\"mcmd\":\"Sys\",\"scmd\":\"Heart\"}");
             return;
         }
         
@@ -76,7 +97,7 @@ public class MyWebSocketClient extends WebSocketClient {
             // round list in json
             pickRound(json);
             if (this.round == null) {
-                LOGGER.info("ERROR! {} has no available ROUND!", user);
+                LOGGER.info("ERROR! {} 没有可选择的 ROUND!", user);
                 quitGame();
             } else {
                 sendValidateReq();
@@ -93,14 +114,15 @@ public class MyWebSocketClient extends WebSocketClient {
             String getMapInfoReq = "{\"mcmd\":\"PKMain\",\"scmd\":\"MapInfo\",\"data\":{}}";
             doSend(getMapInfoReq);
             sendNextQuestionReq();
-        }
-//        else if (mcmd.equalsIgnoreCase("PKMain")
-//                   && scmd.equalsIgnoreCase("MapInfoResult")) {
-//            sendNextQuestionReq();
-//        }
-        else if (mcmd.equalsIgnoreCase("PKMain")
-                 && scmd.equalsIgnoreCase("QuestionResult")) {
-            doAnswer(json);
+        } else if (mcmd.equalsIgnoreCase("PKMain")
+                   && scmd.equalsIgnoreCase("QuestionResult")) {
+            parseQuestion(json);
+            doAnswer();
+        } else if (mcmd.equalsIgnoreCase("PKMain")
+                   && scmd.equalsIgnoreCase("AnswerResultCorrect")) {
+            parseCorrectAnswer(json);
+            questionData.putQuestion(currentQuestion);
+            currentQuestion = null;
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerStepsResult")) {
             if (hasNextSteps(json)) {
@@ -110,10 +132,17 @@ public class MyWebSocketClient extends WebSocketClient {
             }
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("Statement")) {
+            printResult(json);
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+            }
             sendGetRoundListReq();
         }
         
     }
+    
+    
     
     JsonPath userId = JsonPathCompiler.compile("$..userId");
     
@@ -177,6 +206,29 @@ public class MyWebSocketClient extends WebSocketClient {
         doSend(JoinMatch.replace("$ROUND_ID", String.valueOf(round.roundId)));
     }
     
+    private void parseQuestion(String json) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(json);
+            String text = jsonNode.get("data").toString();
+            Question question = objectMapper.readValue(text, Question.class);
+            this.currentQuestion = question;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static JsonPath correctAnswerID = JsonPathCompiler.compile("$..correctAnswerID");
+    
+    private void parseCorrectAnswer(String json) {
+        String id = SURFER.collectOne(json, String.class, correctAnswerID);
+        currentQuestion.correctAnswerId = id;
+        for (Question.Answer answer : currentQuestion.answers) {
+            if (answer.answerId.equals(id)) {
+                currentQuestion.correctAnswerContent = answer.content;
+            }
+        }
+    }
+    
     private static JsonPath hasNextSteps = JsonPathCompiler.compile("$..hasNextSteps");
     
     private boolean hasNextSteps(String json) {
@@ -195,28 +247,55 @@ public class MyWebSocketClient extends WebSocketClient {
     private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
                                    "\"data\":{\"answerId\":$ANSWER_ID}}";
     
-    private void doAnswer(String question) {
-        doSend(AiAutoAnswer);
+    private void doAnswer() {
         try {
-            Thread.sleep(3000);
+            Thread.sleep(1000);
+            doSend(AiAutoAnswer);
+            Thread.sleep(5000);
         } catch (InterruptedException e) {
         }
-        String answerId = SURFER.collectOne(question, String.class, correctAnswer);
-        doSend(Answer.replace("$ANSWER_ID", answerId));
+        
+        Question.Answer answer = questionData.findCorrectAnswer(currentQuestion);
+        if (answer == null) {
+            LOGGER.info("{} 没有找到问题{}的正确答案", user, currentQuestion.questionId);
+            answer = currentQuestion.answers.get(0);
+        } else {
+            LOGGER.info("{} 从题库中的正确答案为{}", user, answer);
+        }
+        doSend(Answer.replace("$ANSWER_ID", answer.answerId));
     }
     
     private void doSend(String text) {
         LOGGER.info("{} Send {}", user, text);
+        lastSend = System.currentTimeMillis();
         send(text);
     }
     
-    private void quitGame() {
-        LOGGER.info("{} Quit Game", user);
+    JsonPath winnerPath = JsonPathCompiler.compile("$..winner");
+    private void printResult(String json) {
+        int winner = SURFER.collectOne(json, Integer.class, winnerPath);
+        
+        if (winner == user.userId) {
+            LOGGER.info("{} 本关获胜", user);
+        }else if(winner == 0){
+            LOGGER.info("{} 本关平局", user);
+        }else {
+            LOGGER.info("{} 本关惜败", user);
+        }
+        
+    }
+    
+    public boolean isHalt() {
+        return System.currentTimeMillis() - lastSend > 1000 * 60;
+    }
+    
+    public void quitGame() {
         close();
     }
     
     @Override
     public void onClose(int code, String reason, boolean remote) {
+        LOGGER.info("{} 退出游戏", user);
         latch.countDown();
     }
     

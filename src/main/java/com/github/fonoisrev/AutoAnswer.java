@@ -1,5 +1,6 @@
 package com.github.fonoisrev;
 
+import com.github.fonoisrev.data.QuestionData;
 import com.github.fonoisrev.data.UserData;
 import com.github.fonoisrev.run.MyRunner;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,12 @@ public class AutoAnswer {
     public UserData userData() {
         return new UserData();
     }
+    
+    @Bean
+    public QuestionData questionData() {
+        return new QuestionData();
+    }
+    
     
     @Value("${proxy.ip}")
     String proxyIp = "";
