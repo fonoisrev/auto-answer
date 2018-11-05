@@ -48,7 +48,7 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private User user;
     
-    private Question currentQuestion;
+    private volatile Question currentQuestion;
     
     private QuestionData questionData;
     
