@@ -71,7 +71,7 @@ public class QuestionData {
         return null;
     }
     
-    public void putQuestion(Question question) {
+    public synchronized void putQuestion(Question question) {
         if (questionById.containsKey(question.questionId)) {
             return;
         }

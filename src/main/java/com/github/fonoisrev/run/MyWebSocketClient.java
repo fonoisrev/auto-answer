@@ -52,6 +52,8 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private QuestionData questionData;
     
+    private volatile boolean isGaming = false;
+    
     /**
      * 关卡
      */
@@ -95,6 +97,15 @@ public class MyWebSocketClient extends WebSocketClient {
         } else if (mcmd.equalsIgnoreCase("TmMain")
                    && scmd.equalsIgnoreCase("TmListSuccess")) {
             // round list in json
+            synchronized (this) {
+                if (!isGaming) {
+                    isGaming = true;
+                }else {
+                    // 有时遇到逃跑的对手会出现两次结束消息，应避免重复开始游戏
+                    LOGGER.info("当前正在对局中，错误的开始状态");
+                    return;
+                }
+            }
             pickRound(json);
             if (this.round == null) {
                 LOGGER.info("ERROR! {} 没有可选择的 ROUND!", user);
@@ -133,6 +144,7 @@ public class MyWebSocketClient extends WebSocketClient {
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("Statement")) {
             printResult(json);
+            isGaming = false;
             try {
                 Thread.sleep(10000);
             } catch (InterruptedException e) {
@@ -141,7 +153,6 @@ public class MyWebSocketClient extends WebSocketClient {
         }
         
     }
-    
     
     
     JsonPath userId = JsonPathCompiler.compile("$..userId");
@@ -249,7 +260,7 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private void doAnswer() {
         try {
-            Thread.sleep(1000);
+            Thread.sleep(3000);
             doSend(AiAutoAnswer);
             Thread.sleep(5000);
         } catch (InterruptedException e) {
@@ -272,14 +283,15 @@ public class MyWebSocketClient extends WebSocketClient {
     }
     
     JsonPath winnerPath = JsonPathCompiler.compile("$..winner");
+    
     private void printResult(String json) {
         int winner = SURFER.collectOne(json, Integer.class, winnerPath);
         
         if (winner == user.userId) {
             LOGGER.info("{} 本关获胜", user);
-        }else if(winner == 0){
+        } else if (winner == 0) {
             LOGGER.info("{} 本关平局", user);
-        }else {
+        } else {
             LOGGER.info("{} 本关惜败", user);
         }
         
