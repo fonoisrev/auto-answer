@@ -103,7 +103,7 @@ public class MyWebSocketClient extends WebSocketClient {
                     isGaming = true;
                 }else {
                     // 有时遇到逃跑的对手会出现两次结束消息，应避免重复开始游戏
-                    LOGGER.info("当前正在对局中，错误的开始状态");
+                    LOGGER.info("{} 当前正在对局中，错误的启动游戏请求，己忽略！", user);
                     return;
                 }
             }
@@ -224,7 +224,7 @@ public class MyWebSocketClient extends WebSocketClient {
         try {
             Thread.sleep(2000);
             doSend(AiAutoAnswer);
-            Thread.sleep(5000);
+            Thread.sleep(3000);
             
             
             JsonNode jsonNode = objectMapper.readTree(json);
@@ -261,12 +261,12 @@ public class MyWebSocketClient extends WebSocketClient {
     private static JsonPath hasNextSteps = JsonPathCompiler.compile("$..hasNextSteps");
     
     private boolean hasNextSteps(String json) {
-        return SURFER.collectOne(json, Boolean.class, hasNextSteps);
+        return isGaming && SURFER.collectOne(json, Boolean.class, hasNextSteps);
     }
     
     private void sendNextQuestionReq() {
         try {
-            Thread.sleep(3000);
+            Thread.sleep(1000);
         } catch (InterruptedException e) {
         }
         doSend("{\"mcmd\":\"PKMain\",\"scmd\":\"NextQuestion\",\"data\":{}}");
