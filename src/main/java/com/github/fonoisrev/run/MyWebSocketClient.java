@@ -134,7 +134,7 @@ public class MyWebSocketClient extends WebSocketClient {
             parseCorrectAnswer(json);
 //            LOGGER.info("{} 将问题{}写入题库", user, currentQuestion.questionId);
             questionData.putQuestion(currentQuestion);
-            currentQuestion = null;
+//            currentQuestion = null;
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerStepsResult")) {
             if (hasNextSteps(json)) {
@@ -234,8 +234,8 @@ public class MyWebSocketClient extends WebSocketClient {
     
             Question.Answer answer = questionData.findCorrectAnswer(question);
             if (answer == null) {
-                LOGGER.info("{} 没有找到问题{}的正确答案", user, currentQuestion.questionId);
-                answer = currentQuestion.answers.get(0);
+                LOGGER.info("{} 没有找到问题{}的正确答案", user, question.questionId);
+                answer = question.answers.get(0);
             } else {
                 LOGGER.info("{} 从题库中的正确答案为{}", user, answer);
             }
@@ -315,8 +315,8 @@ public class MyWebSocketClient extends WebSocketClient {
     
     @Override
     public void onError(Exception ex) {
-        System.out.println(Thread.currentThread().getName());
-        ex.printStackTrace();
+        LOGGER.error(ex.getMessage());
+//        ex.printStackTrace();
     }
     
 }
