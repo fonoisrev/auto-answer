@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 
 /**
  * http://bath5.mggame.com.cn/zspkhscf/dj/game .html?state=home&session
@@ -44,7 +45,7 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private static JsonPath SCMD = JsonPathCompiler.compile("$..scmd");
     
-    private final CountDownLatch latch;
+    private final Semaphore semaphore;
     
     private User user;
     
@@ -63,10 +64,10 @@ public class MyWebSocketClient extends WebSocketClient {
     
     public MyWebSocketClient(
             URI serverUri, Draft protocolDraft, User user, QuestionData questionData,
-            CountDownLatch latch) {
+            Semaphore semaphore) {
         super(serverUri, protocolDraft);
         this.user = user;
-        this.latch = latch;
+        this.semaphore = semaphore;
         this.questionData = questionData;
     }
     
@@ -127,23 +128,17 @@ public class MyWebSocketClient extends WebSocketClient {
             sendNextQuestionReq();
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("QuestionResult")) {
-            parseQuestion(json);
-            doAnswer();
+            parseQuestionAndDoAnswer(json);
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerResultCorrect")) {
             parseCorrectAnswer(json);
 //            LOGGER.info("{} 将问题{}写入题库", user, currentQuestion.questionId);
             questionData.putQuestion(currentQuestion);
+            currentQuestion = null;
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerStepsResult")) {
             if (hasNextSteps(json)) {
-                try {
-                    Thread.yield();
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                }
                 sendNextQuestionReq();
-                currentQuestion = null;
             } else {
                 // nothing
             }
@@ -223,13 +218,30 @@ public class MyWebSocketClient extends WebSocketClient {
         doSend(JoinMatch.replace("$ROUND_ID", String.valueOf(round.roundId)));
     }
     
-    private void parseQuestion(String json) {
+    private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
+                                   "\"data\":{\"answerId\":$ANSWER_ID}}";
+    private void parseQuestionAndDoAnswer(String json) {
         try {
+            Thread.sleep(2000);
+            doSend(AiAutoAnswer);
+            Thread.sleep(5000);
+            
+            
             JsonNode jsonNode = objectMapper.readTree(json);
             String text = jsonNode.get("data").toString();
             Question question = objectMapper.readValue(text, Question.class);
             this.currentQuestion = question;
-        } catch (IOException e) {
+    
+            Question.Answer answer = questionData.findCorrectAnswer(question);
+            if (answer == null) {
+                LOGGER.info("{} 没有找到问题{}的正确答案", user, currentQuestion.questionId);
+                answer = currentQuestion.answers.get(0);
+            } else {
+                LOGGER.info("{} 从题库中的正确答案为{}", user, answer);
+            }
+            
+            doSend(Answer.replace("$ANSWER_ID", answer.answerId));
+        } catch (IOException|InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
@@ -253,6 +265,10 @@ public class MyWebSocketClient extends WebSocketClient {
     }
     
     private void sendNextQuestionReq() {
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+        }
         doSend("{\"mcmd\":\"PKMain\",\"scmd\":\"NextQuestion\",\"data\":{}}");
     }
     
@@ -261,26 +277,6 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private static JsonPath correctAnswer = JsonPathCompiler.compile("$..correctAnswer");
     
-    private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
-                                   "\"data\":{\"answerId\":$ANSWER_ID}}";
-    
-    private void doAnswer() {
-        try {
-            Thread.sleep(3000);
-            doSend(AiAutoAnswer);
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-        }
-        
-        Question.Answer answer = questionData.findCorrectAnswer(currentQuestion);
-        if (answer == null) {
-            LOGGER.info("{} 没有找到问题{}的正确答案", user, currentQuestion.questionId);
-            answer = currentQuestion.answers.get(0);
-        } else {
-            LOGGER.info("{} 从题库中的正确答案为{}", user, answer);
-        }
-        doSend(Answer.replace("$ANSWER_ID", answer.answerId));
-    }
     
     private void doSend(String text) {
         LOGGER.info("{} Send {}", user, text);
@@ -314,7 +310,7 @@ public class MyWebSocketClient extends WebSocketClient {
     @Override
     public void onClose(int code, String reason, boolean remote) {
         LOGGER.info("{} 退出游戏", user);
-        latch.countDown();
+        semaphore.release();
     }
     
     @Override

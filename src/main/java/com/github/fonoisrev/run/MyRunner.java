@@ -16,10 +16,10 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Proxy.Type;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 
 public class MyRunner implements CommandLineRunner {
     
@@ -44,42 +44,31 @@ public class MyRunner implements CommandLineRunner {
     
     @Override
     public void run(String... args) throws Exception {
-        ExecutorService threadPool = Executors.newFixedThreadPool(1);
+        int concurrency = 3;
+        Semaphore s = new Semaphore(concurrency);// 5个用户同时
+        
         List<User> users = userData.getUsers();
-        CountDownLatch latch = new CountDownLatch(users.size());
+        CountDownLatch latch = null;
         
-//        Master master = new Master();
-        
-        for (User user : users) {
-//            Runnable game = new Runnable() {
-//
-//                @Override
-//                public void run() {
-//
-                    MyWebSocketClient client = null;
-//                    try {
-                        URI uri = new URI("ws://bath5.mggame.com.cn/wshscf");
-                        client = new MyWebSocketClient(
-                                uri, new Draft_6455(), user, questionData, latch);
-                        if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
-                            client.setProxy(new Proxy(
-                                    Type.HTTP, new InetSocketAddress(proxyIp, proxyPort)));
-                        }
-//                        master.addGame(client);
-                        client.connect();
-//                    } catch (URISyntaxException e) {
-//                        e.printStackTrace();
-//                    }
-//                }
-//            };
-//            threadPool.submit(game);
+        for (int i = 0; i < users.size(); ++i) {
+            s.acquire();
             
+            MyWebSocketClient client = null;
+            User user = users.get(i);
+            URI uri = new URI("ws://bath5.mggame.com.cn/wshscf");
+            client = new MyWebSocketClient(
+                    uri, new Draft_6455(), user, questionData, s);
+            if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
+                client.setProxy(new Proxy(
+                        Type.HTTP, new InetSocketAddress(proxyIp, proxyPort)));
+            }
+            client.connect();
+    
         }
     
-//        ScheduledExecutorService haltDetect =
-//                Executors.newSingleThreadScheduledExecutor();
-//        haltDetect.scheduleAtFixedRate(master, 20, 10, TimeUnit.SECONDS);
-        latch.await();
+        for (int i = 0; i < concurrency; i++) {
+            s.acquire();
+        }
     }
     
     private static class Master implements Runnable {
