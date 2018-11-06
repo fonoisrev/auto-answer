@@ -99,10 +99,10 @@ public class QuestionData {
                     question.correctAnswerId,
                     question.correctAnswerContent);
             
+            LOGGER.info("向题库中写入问题 {}", question);
         } catch (IOException e) {
         }
-    
-        LOGGER.info("向题库中写入问题 {}", question);
+        
     }
     
 }

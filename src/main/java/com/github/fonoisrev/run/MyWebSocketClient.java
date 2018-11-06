@@ -132,12 +132,18 @@ public class MyWebSocketClient extends WebSocketClient {
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerResultCorrect")) {
             parseCorrectAnswer(json);
+//            LOGGER.info("{} 将问题{}写入题库", user, currentQuestion.questionId);
             questionData.putQuestion(currentQuestion);
-            currentQuestion = null;
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerStepsResult")) {
             if (hasNextSteps(json)) {
+                try {
+                    Thread.yield();
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                }
                 sendNextQuestionReq();
+                currentQuestion = null;
             } else {
                 // nothing
             }
@@ -224,7 +230,7 @@ public class MyWebSocketClient extends WebSocketClient {
             Question question = objectMapper.readValue(text, Question.class);
             this.currentQuestion = question;
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
     
@@ -313,6 +319,7 @@ public class MyWebSocketClient extends WebSocketClient {
     
     @Override
     public void onError(Exception ex) {
+        System.out.println(Thread.currentThread().getName());
         ex.printStackTrace();
     }
     
