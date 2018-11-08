@@ -14,10 +14,10 @@ public class Question {
     public List<Answer> answers;
     
     @JsonProperty("correctAnswer")
-    public String correctAnswerId;
+    public volatile String correctAnswerId;
     
     @JsonIgnore
-    public String correctAnswerContent;
+    public volatile String correctAnswerContent;
     
     
     public static class Answer {

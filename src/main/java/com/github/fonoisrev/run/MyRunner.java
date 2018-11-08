@@ -44,7 +44,7 @@ public class MyRunner implements CommandLineRunner {
     
     @Override
     public void run(String... args) throws Exception {
-        int concurrency = 3;
+        int concurrency = 5;
         Semaphore s = new Semaphore(concurrency);// 5个用户同时
         
         List<User> users = userData.getUsers();
