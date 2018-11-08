@@ -7,9 +7,9 @@ import java.util.List;
 
 public class Question {
     
-    public String questionId;
+    public volatile String questionId;
     
-    public String content;
+    public volatile String content;
     
     public List<Answer> answers;
     
