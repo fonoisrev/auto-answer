@@ -63,6 +63,7 @@ public class MyRunner implements CommandLineRunner {
                         Type.HTTP, new InetSocketAddress(proxyIp, proxyPort)));
             }
             client.connect();
+            Thread.sleep(1000);
     
         }
     
