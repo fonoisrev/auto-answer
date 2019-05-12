@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -16,6 +17,7 @@ import java.net.Proxy;
 import java.net.Proxy.Type;
 
 @SpringBootApplication
+@EnableScheduling
 public class AutoAnswer {
     
     public static void main(String[] args) {
@@ -39,10 +41,10 @@ public class AutoAnswer {
     
     
     @Value("${proxy.ip}")
-    String proxyIp = "";
+    String proxyIp;
     
-    @Value("${proxy.port}")
-    Integer proxyPort = 0;
+    @Value("${proxy.port:0}")
+    Integer proxyPort;
     
     @Bean
     public RestTemplate restTemplate() {

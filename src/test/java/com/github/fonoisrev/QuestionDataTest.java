@@ -20,8 +20,8 @@ public class QuestionDataTest {
     @Test
     public void testPut() {
         Question question = new Question();
-        question.questionId = "100";
-        question.content = "测试内容";
+        question.questionID = "100";
+        question.questionContent = "测试内容";
         question.correctAnswerId = "200";
         question.correctAnswerContent = "答案,ge";
         questionData.putQuestion(question);

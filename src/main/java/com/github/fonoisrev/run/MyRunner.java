@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -17,6 +18,7 @@ import java.net.Proxy;
 import java.net.Proxy.Type;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
@@ -37,10 +39,12 @@ public class MyRunner implements CommandLineRunner {
     RestTemplate template;
     
     @Value("${proxy.ip}")
-    String proxyIp = "";
+    String proxyIp;
     
-    @Value("${proxy.port}")
-    Integer proxyPort = 0;
+    @Value("${proxy.port:0}")
+    Integer proxyPort;
+    
+    List<MyWebSocketClient> games = new ArrayList<>();
     
     @Override
     public void run(String... args) throws Exception {
@@ -48,14 +52,13 @@ public class MyRunner implements CommandLineRunner {
         Semaphore s = new Semaphore(concurrency);// 5个用户同时
         
         List<User> users = userData.getUsers();
-        CountDownLatch latch = null;
         
         for (int i = 0; i < users.size(); ++i) {
             s.acquire();
             
             MyWebSocketClient client = null;
             User user = users.get(i);
-            URI uri = new URI("ws://bath5.mggame.com.cn/wshscf");
+            URI uri = new URI("ws://bath5.mggame.com.cn/wsqcxxd");
             client = new MyWebSocketClient(
                     uri, new Draft_6455(), user, questionData, s);
             if (!StringUtils.isEmpty(proxyIp) && proxyPort != 0) {
@@ -63,32 +66,27 @@ public class MyRunner implements CommandLineRunner {
                         Type.HTTP, new InetSocketAddress(proxyIp, proxyPort)));
             }
             client.connect();
-            Thread.sleep(1000);
-    
+            games.add(client);
+            Thread.sleep(3000); // 避免相遇
         }
-    
+        
         for (int i = 0; i < concurrency; i++) {
             s.acquire();
         }
     }
     
-    private static class Master implements Runnable {
-        
-        List<MyWebSocketClient> games = new ArrayList<>();
-        
-        public void addGame(MyWebSocketClient game) {
-            games.add(game);
-        }
-        
-        
-        @Override
-        public void run() {
-            LOGGER.info("正检查是否失去响应..");
-            for (MyWebSocketClient game : games) {
-                if (game.isHalt()) {
-                    game.quitGame();
-                    games.remove(game);
-                }
+    
+    @Scheduled(fixedRate = 10000)
+    public void haltCheck() {
+        Iterator<MyWebSocketClient> iterator = games.iterator();
+        for (; iterator.hasNext(); ) {
+            MyWebSocketClient game = iterator.next();
+            if (game.isHalt()) {
+                LOGGER.info("{} 失去响应...尝试关闭", game.user);
+                game.quitGame();
+                iterator.remove();
+            } else if (game.isClosed()) {
+                iterator.remove();
             }
         }
     }

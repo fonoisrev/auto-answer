@@ -2,48 +2,32 @@ package com.github.fonoisrev.bean;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
 
 import java.util.List;
 
+@Data
 public class Question {
     
-    public volatile String questionId;
+    public String questionID;
     
-    public volatile String content;
+    public String questionContent;
     
     public List<Answer> answers;
     
-    @JsonProperty("correctAnswer")
+    @JsonIgnore
     public volatile String correctAnswerId;
     
     @JsonIgnore
     public volatile String correctAnswerContent;
     
-    
+    @Data
     public static class Answer {
         
-        public String answerId;
-        
-        public boolean isCorrect;
+        public String answerID;
         
         public String content;
     
-        @Override
-        public String toString() {
-            return "Answer{" +
-                   "answerId='" + answerId + '\'' +
-                   ", content='" + content + '\'' +
-                   '}';
-        }
     }
     
-    @Override
-    public String toString() {
-        return "Question{" +
-               "questionId='" + questionId + '\'' +
-               ", content='" + content + '\'' +
-               ", correctAnswerId='" + correctAnswerId + '\'' +
-               ", correctAnswerContent='" + correctAnswerContent + '\'' +
-               '}';
-    }
 }

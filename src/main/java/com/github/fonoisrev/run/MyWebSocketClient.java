@@ -7,6 +7,7 @@ import com.github.fonoisrev.bean.Question;
 import com.github.fonoisrev.bean.Round;
 import com.github.fonoisrev.bean.User;
 import com.github.fonoisrev.data.QuestionData;
+import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.drafts.Draft;
 import org.java_websocket.handshake.ServerHandshake;
@@ -14,24 +15,15 @@ import org.jsfr.json.JsonSurfer;
 import org.jsfr.json.JsonSurferJackson;
 import org.jsfr.json.compiler.JsonPathCompiler;
 import org.jsfr.json.path.JsonPath;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.Collection;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 
-/**
- * http://bath5.mggame.com.cn/zspkhscf/dj/game .html?state=home&session
- * =ZXlKMGVYQWlPaUpLVjFRaUxDSmhiR2NpT2lKSVV6STFOaUo5LmV5SlZjMlZ5VG1GdFpTSTZJakV6TVRBMk1qY2lMQ0pFYVhOd2JHRjVUbUZ0WlNJNkl1V1F0T2lJcWlJc0lrTnZaR1VpT2lJeE16QXdNRFEwTmlJc0lrRjJZWFJoY2xWeWJDSTZJaUlzSWs5d1pXNUpSQ0k2Ym5Wc2JDd2lTR1ZoWkdsdFoxVnliQ0k2Ym5Wc2JDd2lUbWxqYTA1aGJXVWlPbTUxYkd3c0lrMXBjMUJ5WldacGVDSTZJakV6SWl3aVEyOXRjR0Z1ZVU1aGJXVWlPaUxrdjZIbWdhX21pb0RtbktfbGhhemxqN2dpZlEuNVk0Q25iTGYzWlN0Q0dqb292aGl6Y1pteU1XbzNnczlkS1lQZjdaNjBEYw==
- */
+@Slf4j
 public class MyWebSocketClient extends WebSocketClient {
     
-    /** logger */
-    private static final Logger LOGGER = LoggerFactory
-            .getLogger(MyWebSocketClient.class);
     
     private static JsonSurfer SURFER = JsonSurferJackson.INSTANCE;
     
@@ -47,13 +39,15 @@ public class MyWebSocketClient extends WebSocketClient {
     
     private final Semaphore semaphore;
     
-    private User user;
+    public User user;
     
-    private volatile Question currentQuestion;
+    private Question currentQuestion;
     
     private QuestionData questionData;
     
     private volatile boolean isGaming = false;
+    
+    private int nextStage;
     
     /**
      * 关卡
@@ -86,62 +80,43 @@ public class MyWebSocketClient extends WebSocketClient {
             return;
         }
         
-        LOGGER.info("{} Receive {}", user, json);
+        log.info("{} Rcv {}", user, json);
         
         String mcmd = SURFER.collectOne(json, String.class, MCMD);
         String scmd = SURFER.collectOne(json, String.class, SCMD);
         
-        if (mcmd.equalsIgnoreCase("Account")
-            && scmd.equalsIgnoreCase("LogonSuccess")) {
-            getUserInfo(json);
-            sendGetRoundListReq();
-        } else if (mcmd.equalsIgnoreCase("TmMain")
-                   && scmd.equalsIgnoreCase("TmListSuccess")) {
-            // round list in json
-            synchronized (this) {
-                if (!isGaming) {
-                    isGaming = true;
-                }else {
-                    // 有时遇到逃跑的对手会出现两次结束消息，应避免重复开始游戏
-                    LOGGER.info("{} 当前正在对局中，错误的启动游戏请求，己忽略！", user);
-                    return;
-                }
-            }
-            pickRound(json);
-            if (this.round == null) {
-                LOGGER.info("ERROR! {} 没有可选择的 ROUND!", user);
+        if (mcmd.equalsIgnoreCase("Account")) {
+            if (scmd.equalsIgnoreCase("LogonSuccess")) {
+                getUserInfo(json);
+                sendBattle();
+                sendGetRoundListReq();
+            } else if (scmd.equalsIgnoreCase("LogonFail")) {
                 quitGame();
-            } else {
-                sendValidateReq();
             }
+        } else if (mcmd.equalsIgnoreCase("Stage")
+                   && scmd.equalsIgnoreCase("ListSuccess")) {
+            getNextStage(json);
+            sendValidateReq();
         } else if (mcmd.equalsIgnoreCase("PowerMain")
                    && scmd.equalsIgnoreCase("validateRes")) {
-            if (isValid(json)) {
+            boolean isValid = isValid(json);
+            if (isValid) {
+                startGame();
                 joinMatch();
             } else {
                 quitGame();
             }
+            
         } else if (mcmd.equalsIgnoreCase("Match")
                    && scmd.equalsIgnoreCase("JoinMatchSuccess")) {
-            String getMapInfoReq = "{\"mcmd\":\"PKMain\",\"scmd\":\"MapInfo\",\"data\":{}}";
-            doSend(getMapInfoReq);
-            sendNextQuestionReq();
+            getPlayer(json);
         } else if (mcmd.equalsIgnoreCase("PKMain")
-                   && scmd.equalsIgnoreCase("QuestionResult")) {
+                   && scmd.equalsIgnoreCase("NextQuestion")) {
             parseQuestionAndDoAnswer(json);
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("AnswerResultCorrect")) {
             parseCorrectAnswer(json);
-//            LOGGER.info("{} 将问题{}写入题库", user, currentQuestion.questionId);
             questionData.putQuestion(currentQuestion);
-//            currentQuestion = null;
-        } else if (mcmd.equalsIgnoreCase("PKMain")
-                   && scmd.equalsIgnoreCase("AnswerStepsResult")) {
-            if (hasNextSteps(json)) {
-                sendNextQuestionReq();
-            } else {
-                // nothing
-            }
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("Statement")) {
             printResult(json);
@@ -156,11 +131,21 @@ public class MyWebSocketClient extends WebSocketClient {
     }
     
     
-    JsonPath userId = JsonPathCompiler.compile("$..userId");
+    private static String battle = "{\"mcmd\":\"Battle\",\"scmd\":\"queryUserBattle\"}";
     
-    private void getUserInfo(String json) {
-        user.userId = SURFER.collectOne(json, Integer.class, userId);
+    private void sendBattle() {
+        doSend(battle);
     }
+    
+    private static String List = "{\"mcmd\":\"Stage\",\"scmd\":\"List\",\"data\":{}}";
+    
+    
+    private void sendGetRoundListReq() {
+        doSend(List);
+    }
+    
+    
+    // 登陆
     
     private static String DJ_SSOLogon = "{\"mcmd\":\"Account\",\"scmd\":\"DJ_SSOLogon\"," +
                                         "\"data\":{\"state\":\"home\",\"session\":\"$SESSION\"}}";
@@ -169,154 +154,172 @@ public class MyWebSocketClient extends WebSocketClient {
         doSend(DJ_SSOLogon.replace("$SESSION", user.token));
     }
     
-    private static String List = "{\"mcmd\":\"TmMain\",\"scmd\":\"List\",\"data\":{}}";
     
-    private void sendGetRoundListReq() {
-        doSend(List);
-    }
-    
-    private static JsonPath roundList = JsonPathCompiler.compile("$..roundList[*]");
-    
-    private void pickRound(String json) {
-        Collection<Round> rounds = SURFER.collectAll(json, Round.class, roundList);
-        this.round = null;
-        for (Round round : rounds) {
-            if (!round.lock
-                && round.starNum > round.userStarNum) {
-                this.round = round;
-                LOGGER.info("{} Pick {}", user, round);
-                break;
-            }
-        }
-        
-        if (this.round == null) {
-            for (Round round : rounds) {
-                if (!round.lock) {
-                    this.round = round;
-                    break;
-                }
-            }
-        }
-    }
-    
-    private static String validate = "{\"mcmd\":\"PowerMain\",\"scmd\":\"validate\",\"data\":{}}";
-    
-    private void sendValidateReq() {
-        doSend(validate);
-    }
-    
-    private static JsonPath validateResult = JsonPathCompiler.compile("$..validateResult");
-    
-    private boolean isValid(String json) {
-        return SURFER.collectOne(json, Boolean.class, validateResult);
-    }
-    
-    private static String JoinMatch = "{\"mcmd\":\"Match\",\"scmd\":\"JoinMatch\"," +
-                                      "\"data\":{\"roundId\":$ROUND_ID}}";
-    
-    private void joinMatch() {
-        doSend(JoinMatch.replace("$ROUND_ID", String.valueOf(round.roundId)));
-    }
-    
-    private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
-                                   "\"data\":{\"answerId\":$ANSWER_ID}}";
-    private void parseQuestionAndDoAnswer(String json) {
-        try {
-            Thread.sleep(2000);
-            doSend(AiAutoAnswer);
-            Thread.sleep(3000);
-            
-            
-            JsonNode jsonNode = objectMapper.readTree(json);
-            String text = jsonNode.get("data").toString();
-            Question question = objectMapper.readValue(text, Question.class);
-            this.currentQuestion = question;
-    
-            Question.Answer answer = questionData.findCorrectAnswer(question);
-            if (answer == null) {
-                LOGGER.info("{} 没有找到问题{}的正确答案", user, question.questionId);
-                answer = question.answers.get(0);
-            } else {
-                LOGGER.info("{} 从题库中的正确答案为{}", user, answer);
-            }
-            
-            doSend(Answer.replace("$ANSWER_ID", answer.answerId));
-        } catch (IOException|InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    
-    private static JsonPath correctAnswerID = JsonPathCompiler.compile("$..correctAnswerID");
-    
-    private void parseCorrectAnswer(String json) {
-        String id = SURFER.collectOne(json, String.class, correctAnswerID);
-        currentQuestion.correctAnswerId = id;
-        for (Question.Answer answer : currentQuestion.answers) {
-            if (answer.answerId.equals(id)) {
-                currentQuestion.correctAnswerContent = answer.content;
-            }
-        }
-    }
-    
-    private static JsonPath hasNextSteps = JsonPathCompiler.compile("$..hasNextSteps");
-    
-    private boolean hasNextSteps(String json) {
-        return isGaming && SURFER.collectOne(json, Boolean.class, hasNextSteps);
-    }
-    
-    private void sendNextQuestionReq() {
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-        }
-        doSend("{\"mcmd\":\"PKMain\",\"scmd\":\"NextQuestion\",\"data\":{}}");
-    }
-    
-    private static String AiAutoAnswer =
-            "{\"mcmd\":\"PKMain\",\"scmd\":\"AiAutoAnswer\",\"data\":{}}";
-    
-    private static JsonPath correctAnswer = JsonPathCompiler.compile("$..correctAnswer");
-    
-    
-    private void doSend(String text) {
-        LOGGER.info("{} Send {}", user, text);
-        lastSend = System.currentTimeMillis();
-        send(text);
-    }
-    
+    // 对局结果
     JsonPath winnerPath = JsonPathCompiler.compile("$..winner");
     
     private void printResult(String json) {
         int winner = SURFER.collectOne(json, Integer.class, winnerPath);
         
         if (winner == user.userId) {
-            LOGGER.info("{} 本关获胜", user);
+            log.info("{} 本关获胜", user);
         } else if (winner == 0) {
-            LOGGER.info("{} 本关平局", user);
+            log.info("{} 本关平局", user);
         } else {
-            LOGGER.info("{} 本关惜败", user);
+            log.info("{} 本关惜败", user);
         }
         
+    }
+    
+    // 处理正确答案
+    private static JsonPath correctAnswerID = JsonPathCompiler.compile("$..correctAnswerID");
+    
+    private void parseCorrectAnswer(String json) {
+        String id = SURFER.collectOne(json, String.class, correctAnswerID);
+        currentQuestion.correctAnswerId = id;
+        for (Question.Answer answer : currentQuestion.answers) {
+            if (answer.answerID.equals(id)) {
+                currentQuestion.correctAnswerContent = answer.content;
+            }
+        }
+    }
+    
+    // 作答
+    private static String AiAutoAnswer =
+            "{\"mcmd\":\"PKMain\",\"scmd\":\"AiAutoAnswer\",\"data\":{}}";
+    
+    private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
+                                   "\"data\":{\"answerId\":$ANSWER_ID}}";
+    
+    private void parseQuestionAndDoAnswer(String json) {
+        try {
+            Thread.sleep(7000); //假装正常答题
+            doSend(AiAutoAnswer);
+            Thread.sleep(2000); //假装正常答题
+            
+            
+            JsonNode jsonNode = objectMapper.readTree(json);
+            String text = jsonNode.get("data").toString();
+            Question question = objectMapper.readValue(text, Question.class);
+            this.currentQuestion = question;
+            
+            Question.Answer answer = questionData.findCorrectAnswer(question);
+            if (answer == null) {
+                log.info("{} 没有找到问题 {} 的正确答案", user, question.questionID);
+                answer = question.answers.get(0);
+            } else {
+                log.info("{} 从题库中的正确答案为 {}", user, answer);
+            }
+            
+            doSend(Answer.replace("$ANSWER_ID", answer.answerID));
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    // 获取对手信息
+    JsonPath corporationNamePath = JsonPathCompiler.compile("$..corporationName");
+    
+    JsonPath usernamePath = JsonPathCompiler.compile("$..username");
+    
+    private void getPlayer(String json) {
+        String corporationName = SURFER.collectOne(json, String.class, corporationNamePath);
+        String username = SURFER.collectOne(json, String.class, usernamePath);
+        
+        log.info("{} 对手是 {} {}", user, corporationName, username);
+    }
+    
+    // 加入游戏
+    private static String JoinMatch = "{\"mcmd\":\"Match\",\"scmd\":\"JoinMatch\"," +
+                                      "\"data\":{\"choseStageID\":$ROUND_ID}}";
+    
+    private void joinMatch() {
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+        }
+        doSend(JoinMatch.replace("$ROUND_ID", String.valueOf(nextStage)));
+    }
+    
+    // 检查校验结果
+    private static JsonPath validateResult = JsonPathCompiler.compile("$..data");
+    
+    private boolean isValid(String json) {
+        return SURFER.collectOne(json, Boolean.class, validateResult);
+    }
+    
+    // 校验
+    private static String validate = "{\"mcmd\":\"PowerMain\",\"scmd\":\"validate\",\"data\":{}}";
+    
+    private void sendValidateReq() {
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+        }
+        doSend(validate);
+    }
+    
+    // 决定下一关
+    JsonPath currentStagePath = JsonPathCompiler.compile("$..currentStage");
+    
+    JsonPath powerPath = JsonPathCompiler.compile("$..power");
+    
+    JsonPath starCntPath = JsonPathCompiler.compile("$..starCnt");
+    
+    private void getNextStage(String json) {
+        int currentStage = SURFER.collectOne(json, Integer.class, currentStagePath);
+        int power = SURFER.collectOne(json, Integer.class, powerPath);
+        int startCnt = SURFER.collectOne(json, Integer.class, starCntPath);
+        
+        if (startCnt >= currentStage || startCnt >= 5) {
+            nextStage = currentStage + 1;
+        } else {
+            nextStage = currentStage;
+        }
+        if (nextStage > 10) {
+            nextStage = 10;
+        }
+        
+        log.info("user {} power {} nextStage {}", user, power, nextStage);
+    }
+    
+    
+    JsonPath userIdPath = JsonPathCompiler.compile("$..userId");
+    
+    // 获取userid
+    private void getUserInfo(String json) {
+        user.userId = SURFER.collectOne(json, Integer.class, userIdPath);
     }
     
     public boolean isHalt() {
         return System.currentTimeMillis() - lastSend > 1000 * 60;
     }
     
+    private void startGame() {
+        isGaming = true;
+    }
+    
     public void quitGame() {
+        isGaming = false;
         close();
     }
     
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        LOGGER.info("{} 退出游戏", user);
+        log.info("{} 退出游戏", user);
         semaphore.release();
     }
     
     @Override
     public void onError(Exception ex) {
-        LOGGER.error(ex.getMessage());
+        log.error(ex.getMessage());
 //        ex.printStackTrace();
     }
     
+    
+    private void doSend(String text) {
+        log.info("{} Send {}", user, text);
+        lastSend = System.currentTimeMillis();
+        send(text);
+    }
 }

@@ -35,8 +35,8 @@ public class QuestionData {
         Iterable<CSVRecord> records = csvFormat.parse(in);
         for (CSVRecord record : records) {
             Question question = new Question();
-            question.questionId = record.get("QUESTION_ID");
-            question.content = record.get("CONTENT");
+            question.questionID = record.get("QUESTION_ID");
+            question.questionContent = record.get("CONTENT");
             question.correctAnswerId = record.get("CORRECT_ANSWER_ID");
             question.correctAnswerContent = record.get("CORRECT_ANSWER_CONTENT");
             putQuestionIntoMap(question);
@@ -47,21 +47,21 @@ public class QuestionData {
     public Answer findCorrectAnswer(Question question) {
         if (!"0".equals(question.correctAnswerId)) {
             for (Answer answer : question.answers) {
-                if (answer.answerId.equals(question.correctAnswerId)) {
+                if (answer.answerID.equals(question.correctAnswerId)) {
                     return answer;
                 }
             }
         }
         
         Question record = null;
-        if (questionById.containsKey(question.questionId)) {
-            record = questionById.get(question.questionId);
-        } else if (questionByContent.containsKey(question.content)) {
-            record = questionByContent.get(question.content);
+        if (questionById.containsKey(question.questionID)) {
+            record = questionById.get(question.questionID);
+        } else if (questionByContent.containsKey(question.questionContent)) {
+            record = questionByContent.get(question.questionContent);
         }
         if (record != null) {
             for (Answer answer : question.answers) {
-                if (record.correctAnswerId.equals(answer.answerId)
+                if (record.correctAnswerId.equals(answer.answerID)
                     || record.correctAnswerContent.equals(answer.content)) {
                     return answer;
                 }
@@ -72,7 +72,7 @@ public class QuestionData {
     }
     
     public synchronized void putQuestion(Question question) {
-        if (questionById.containsKey(question.questionId)) {
+        if (questionById.containsKey(question.questionID)) {
             return;
         }
         putQuestionIntoMap(question);
@@ -80,11 +80,11 @@ public class QuestionData {
     }
     
     private void putQuestionIntoMap(Question question) {
-        if (questionById.putIfAbsent(question.questionId, question) != null) {
-            LOGGER.warn("Question : id={} 已经存在", question.questionId);
+        if (questionById.putIfAbsent(question.questionID, question) != null) {
+            LOGGER.warn("Question : id={} 已经存在", question.questionID);
         }
-        if (questionByContent.putIfAbsent(question.content, question) != null) {
-            LOGGER.warn("Question : content={} 己经存在", question.content);
+        if (questionByContent.putIfAbsent(question.questionContent, question) != null) {
+            LOGGER.warn("Question : content={} 己经存在", question.questionContent);
         }
     }
     
@@ -94,11 +94,11 @@ public class QuestionData {
                 CSVPrinter printer = new CSVPrinter(out, csvFormat)
         ) {
             printer.printRecord(
-                    question.questionId,
-                    question.content,
+                    question.questionID,
+                    question.questionContent,
                     question.correctAnswerId,
                     question.correctAnswerContent);
-            
+            out.flush();
             LOGGER.info("向题库中写入问题 {}", question);
         } catch (IOException e) {
         }
