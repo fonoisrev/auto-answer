@@ -52,7 +52,9 @@ public class MyRunner implements CommandLineRunner {
         Semaphore s = new Semaphore(concurrency);// 5个用户同时
         
         List<User> users = userData.getUsers();
-        
+    
+        startHaltCheck();
+    
         for (int i = 0; i < users.size(); ++i) {
             s.acquire();
             
@@ -67,7 +69,7 @@ public class MyRunner implements CommandLineRunner {
             }
             client.connect();
             games.add(client);
-            Thread.sleep(3000); // 避免相遇
+            Thread.sleep(4400); // 避免相遇
         }
         
         for (int i = 0; i < concurrency; i++) {
@@ -75,8 +77,23 @@ public class MyRunner implements CommandLineRunner {
         }
     }
     
+    private void startHaltCheck() {
+        Thread haltCheck = new Thread(){
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(10000);
+                } catch (InterruptedException e) {
+                }
+                haltCheck();
+            }
+        };
+        haltCheck.setDaemon(true);
+        haltCheck.start();
+    }
     
-    @Scheduled(fixedRate = 10000)
+    
+    //    @Scheduled(fixedRate = 10000)
     public void haltCheck() {
         Iterator<MyWebSocketClient> iterator = games.iterator();
         for (; iterator.hasNext(); ) {

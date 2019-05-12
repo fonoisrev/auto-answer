@@ -17,7 +17,7 @@ import java.net.Proxy;
 import java.net.Proxy.Type;
 
 @SpringBootApplication
-@EnableScheduling
+//@EnableScheduling
 public class AutoAnswer {
     
     public static void main(String[] args) {

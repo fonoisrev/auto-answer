@@ -120,14 +120,17 @@ public class MyWebSocketClient extends WebSocketClient {
         } else if (mcmd.equalsIgnoreCase("PKMain")
                    && scmd.equalsIgnoreCase("Statement")) {
             printResult(json);
-            isGaming = false;
             try {
                 Thread.sleep(10000);
             } catch (InterruptedException e) {
             }
-            sendGetRoundListReq();
+            if (isGaming) {
+                sendGetRoundListReq();
+                isGaming = false;
+            } else {
+                log.info("异常状态，重复通知");
+            }
         }
-        
     }
     
     
@@ -189,11 +192,11 @@ public class MyWebSocketClient extends WebSocketClient {
             "{\"mcmd\":\"PKMain\",\"scmd\":\"AiAutoAnswer\",\"data\":{}}";
     
     private static String Answer = "{\"mcmd\":\"PKMain\",\"scmd\":\"Answer\"," +
-                                   "\"data\":{\"answerId\":$ANSWER_ID}}";
+                                   "\"data\":{\"answerID\":$ANSWER_ID,\"timer\":2736}}";
     
     private void parseQuestionAndDoAnswer(String json) {
         try {
-            Thread.sleep(7000); //假装正常答题
+            Thread.sleep(6000); //假装正常答题
             doSend(AiAutoAnswer);
             Thread.sleep(2000); //假装正常答题
             
